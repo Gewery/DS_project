@@ -1,33 +1,24 @@
 import os
 import socket
 import subprocess
-import logging
-import io
-import traceback
+import sys
 
 
-def recieve_file(dest_location): # run when client wants to upload file
+def recieve_file(server_location): # run when client wants to upload file
     print('DEBUG: recieve_file function')
+    if os.path.exists(server_location):
+        print('File already exists, saving it as: ', end='')
+        server_location, ext = server_location[:server_location.rfind('.')], server_location[server_location.rfind('.') + 1:]
 
-    if os.path.exists(dest_location):
-        print('File already exists, saving it as: ', end='') # TODO: Send this message to client
-        dest_location, ext = dest_location[:dest_location.rfind('.')], dest_location[dest_location.rfind('.') + 1:]
-        number = 0
-        if dest_location[-1] == ')':
-            try:
-                number = int(dest_location[dest_location.rfind('(') + 1:-1])
-            except:
-                pass
-        number += 1
+        number = 1
+        while os.path.exists(server_location + '_copy' + str(number)):
+            number += 1
 
-        if number != 1:
-            dest_location = dest_location[:dest_location.rfind('(')]
+        server_location += '_copy' + str(number) + '.' + ext
 
-        dest_location += '(' + str(number) + ').' + ext
+        print(server_location)
 
-        print(dest_location)
-
-    f = open(dest_location, 'wb+')
+    f = open(server_location, 'wb+')
     number_of_kb = int(recieve_string())
 
     for i in range(number_of_kb):
@@ -35,12 +26,12 @@ def recieve_file(dest_location): # run when client wants to upload file
 
     f.close()
 
-    print('file ' + dest_location + ' recieved')
+    print('file ' + server_location + ' recieved')
 
-def send_file(local_location): # run when client want to download file
+def send_file(server_location): # run when client want to download file
     print('DEBUG: send_file function')
 
-    f = open(local_location)
+    f = open(server_location, 'rb')
     to_send = []
     chunk = f.read(1024)
     while chunk:
@@ -54,14 +45,16 @@ def send_file(local_location): # run when client want to download file
 
     f.close()
 
-    print('file ' + local_location + ' sent')
+    print('file ' + server_location + ' sent')
 
 def recieve_string():
-    st = bytearray(con.recv(1024))
-
-    if len(st) == 0:
+    try:
+        st = bytearray(con.recv(1024))
+    except:
         con.close()
         print('connection closed')
+        return ""
+
 
     while len(st) != 0 and st[0] == 0:
         st.remove(0)
@@ -90,32 +83,17 @@ while True:
         command = recieve_string() # TODO handle syntax errors
 
         if len(command) == 0:
-            continue
+            break
 
         if command[:2] == 'uf':
-            command, local_location, dest_location = map(str, command.split())
-            recieve_file(dest_location)
+            command, client_location, server_location = map(str, command.split())
+            recieve_file(server_location)
         elif command[:2] == 'df':
-            command, dest_location, local_location = map(str, command.split())
-            send_file()
+            command, server_location, client_location = map(str, command.split())
+            send_file(server_location)
         else:
-
             try:
-                result = subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT).decode('utf-8')
+                result = subprocess.check_output(command).decode('utf-8')
                 send_string_as_kb(result)
             except:
-                logger = logging.getLogger('basic_logger')
-                logger.setLevel(logging.DEBUG)
-
-                log_capture_string = io.StringIO()
-                ch = logging.StreamHandler(log_capture_string)
-                ch.setLevel(logging.DEBUG)
-
-                logger.addHandler(ch)
-
-                logger.error(traceback.format_exc())
-
-                log_contents = log_capture_string.getvalue()
-                log_capture_string.close()
-
-                send_string_as_kb(log_contents)
+                send_string_as_kb(str(sys.exc_info()[1]))

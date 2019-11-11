@@ -9,13 +9,14 @@ s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 s.bind(('', 8800))
 s.listen()
 
-con, addr = s.accept()
-print(str(addr) + ' connected')
+while True:
+    con, addr = s.accept()
+    print(str(addr) + ' connected')
 
-storage_addr = get_available_storage_address()
-con.send(bytes(storage_addr))
-print(str(storage_addr) + ' sent to client')
+    storage_addr = get_available_storage_address()
+    con.send(bytes(storage_addr))
+    print(str(storage_addr) + ' sent to client')
 
-con.close()
+    con.close()
 
-print('connection closed')
+    print('connection closed')
