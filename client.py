@@ -4,14 +4,14 @@ import time
 import sys
 
 def upload_file(local_location, dest_location):
-    f = open(local_location)
+    f = open(local_location, 'rb')
     to_send = []
     chunk = f.read(1024)
     while chunk:
         to_send.append(chunk)
         chunk = f.read(1024)
 
-    send_string_as_kb(len(to_send)) # TODO probably will need to add some 0-s in the last kb
+    send_string_as_kb(str(len(to_send))) # TODO probably will need to add some 0-s in the last kb
 
     for kb in to_send:
         s.send(kb)
@@ -72,7 +72,7 @@ def send_string_as_kb(st):
 print(
     'commands:\nupload file: uf [location on localhost] [location on server (with name of file)]\ndownload file: df [location of file on server ] [location on localhost (with name of file)]\n')
 
-nameserver_address, nameserver_port = "3.15.180.89", 8800
+nameserver_address, nameserver_port = "3.134.82.172", 8800
 storage_port = 8800
 s = socket.socket()
 s.connect((nameserver_address, nameserver_port))

