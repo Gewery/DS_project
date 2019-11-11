@@ -1,5 +1,6 @@
 import os
 import socket
+import subprocess
 
 
 def recieve_file(dest_location): # run when client wants to upload file
@@ -27,7 +28,7 @@ def recieve_file(dest_location): # run when client wants to upload file
     number_of_kb = int(recieve_string())
 
     for i in range(number_of_kb):
-        f.write(s.recv(1024))
+        f.write(con.recv(1024))
 
     f.close()
 
@@ -46,27 +47,31 @@ def send_file(local_location): # run when client want to download file
     send_string_as_kb(len(to_send))  # TODO probably will need to add some 0-s in the last kb
 
     for kb in to_send:
-        s.send(kb)
+        con.send(kb)
 
     f.close()
 
     print('file ' + local_location + ' sent')
 
 def recieve_string():
-    st = bytearray(s.recv(1024))
-    while st[0] == 0:
+    st = bytearray(con.recv(1024))
+
+    if len(st) == 0:
+        con.close()
+        print('connection closed')
+
+    while len(st) != 0 and st[0] == 0:
         st.remove(0)
 
     return st.decode('utf-8')
 
 def send_string_as_kb(st):
-    #global s
     encoded_command = bytes(st, 'utf-8')
     kb = bytearray()
     for i in range(1024 - len(encoded_command)):
         kb.append(0)
     kb += encoded_command
-    s.send(kb)  # send command with 0-bytes in the beginning
+    con.send(kb)  # send command with 0-bytes in the beginning
 
 
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -74,16 +79,22 @@ s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 s.bind(('', 8800))
 s.listen()
 
-con, addr = s.accept()
-
 while True:
-    command = recieve_string() # TODO handle syntax errors
+    con, addr = s.accept()
+    print(str(addr) + 'connected')
 
-    if command[:2] == 'uf':
-        command, local_location, dest_location = map(str, command.split())
-        recieve_file(dest_location)
-    elif command[:2] == 'df':
-        command, dest_location, local_location = map(str, command.split())
-        send_file()
-    else:
-        os.system(command) # TODO pass output of this to client
+    while True:
+        command = recieve_string() # TODO handle syntax errors
+
+        if len(command) == 0:
+            continue
+
+        if command[:2] == 'uf':
+            command, local_location, dest_location = map(str, command.split())
+            recieve_file(dest_location)
+        elif command[:2] == 'df':
+            command, dest_location, local_location = map(str, command.split())
+            send_file()
+        else:
+            result = subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT).decode('utf-8')
+            send_string_as_kb(result)

@@ -1,4 +1,5 @@
 import socket
+import time
 
 def get_available_storage_address():
     return [127, 0, 0, 1]
@@ -12,7 +13,9 @@ con, addr = s.accept()
 print(str(addr) + ' connected')
 
 storage_addr = get_available_storage_address()
-s.send(bytes(storage_addr))
+con.send(bytes(storage_addr))
 print(str(storage_addr) + ' sent to client')
-s.close()
+
+con.close()
+
 print('connection closed')
