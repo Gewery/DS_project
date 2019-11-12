@@ -67,7 +67,7 @@ print(
     'commands:\nupload file: uf [location on localhost] [location on server (with name of file)]\n'
     'download file: df [location of file on server] [location on localhost (with name of file)]\n')
 
-nameserver_address, nameserver_port = "3.134.82.172", 8800
+nameserver_address, nameserver_port = "3.134.102.205", 8800
 storage_port = 8800
 s = socket.socket()
 s.connect((nameserver_address, nameserver_port))

