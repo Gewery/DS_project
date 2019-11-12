@@ -84,12 +84,14 @@ s.close()
 s = socket.socket()
 s.connect((storage_addr, storage_port))
 
+working_dir = '~'
+
 while True:
-    command = input('> ')
+    command = input(working_dir + '> ')
 
     send_string_as_kb(command)
 
-    if command[:2] == 'uf':
+    if command[:2] == 'uf': # TODO while list of commands?
         command, client_location, server_location = map(str, command.split())
         upload_file(client_location)
         print('DEBUG: ' + command + ' from ' + client_location + ' to ' + server_location)
@@ -101,5 +103,17 @@ while True:
         recieve_st = recieve_string()
         if command == "ls":
             recieve_st = recieve_st.replace('\n', ' ')
+
+        lst = list(map(str, command.split()))
+        if lst[0] == 'cd' and recieve_st == 'ok':
+            if lst[1][0] == '/': lst[1] = lst[1][1:]
+            if lst[1][-1] == '/': lst[1] = lst[1][:-1]
+
+            if lst[1] == '..':
+                if working_dir.rfind('/') != -1:
+                    working_dir = working_dir[:working_dir.rfind('/')]
+            else:
+                working_dir += '/' + lst[1]
         if len(recieve_st) != 0:
             print(recieve_st)
+
