@@ -5,7 +5,7 @@ class ServerConnection(Thread):
     def __init__(self, socket: socket.socket):
         super().__init__(daemon=True)
 
-    def run(self):
+    def run(self): # TODO add online_servers support
         while True:
             if len(commands_to_send[self.socket]) > len(responses[self.socket]):
                 self.socket.send(commands_to_send[len(responses[self.socket])])
@@ -58,6 +58,7 @@ def connect_to_servers():
         server_sock = socket.socket()
         server_sock.connect((storage_addr, storage_port))
         sockets.append(server_sock)
+        ServerConnection(server_sock).start()
 
 def send_command_to_servers(command):
     command_number = {}
