@@ -70,6 +70,7 @@ nameserver_address, nameserver_port = "18.218.164.132", 8800
 storage_port = 8800
 s = socket.socket()
 s.connect((nameserver_address, nameserver_port))
+working_dir = recieve_string()
 
 # storage_addr_bytes = s.recv(4)
 # storage_addr = ""
@@ -78,10 +79,8 @@ s.connect((nameserver_address, nameserver_port))
 # storage_addr = storage_addr[:-1]
 # print('Storage server address:', storage_addr)
 
-working_dir = '~'
-
 while True:
-    command = input(working_dir + '> ')
+    command = input('~' + working_dir + '> ')
 
     send_string_as_kb(command)
 
@@ -99,15 +98,9 @@ while True:
             recieve_st = recieve_st.replace('\n', ' ')
 
         lst = list(map(str, command.split()))
-        if lst[0] == 'cd' and recieve_st == 'ok':
-            if lst[1][0] == '/': lst[1] = lst[1][1:]
-            if lst[1][-1] == '/': lst[1] = lst[1][:-1]
-
-            if lst[1] == '..':
-                if working_dir.rfind('/') != -1:
-                    working_dir = working_dir[:working_dir.rfind('/')]
-            else:
-                working_dir += '/' + lst[1]
+        if lst[0] == 'cd' and recieve_st[:13] == 'cd_command_ok':
+            working_dir = recieve_st[13:]
+            continue
         if len(recieve_st) != 0:
             print(recieve_st)
 

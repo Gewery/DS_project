@@ -99,33 +99,7 @@ while True:
             command, server_location, client_location = map(str, command.split())
             server_location = working_dir + server_location
             send_file(server_location)
-        # elif command[:2] == 'cd':
-        #     lst = list(map(str, command.split()))
-        #
-        #     if lst[1][0] == '/': lst[1] = lst[1][1:]
-        #     if lst[1][-1] == '/': lst[1] = lst[1][:-1]
-        #
-        #     if len(lst) > 2:
-        #         send_string_as_kb("Syntax error in command: " + command)
-        #     elif lst[1] == '..':
-        #         if working_dir.rfind('/') != -1:
-        #             working_dir = working_dir[:working_dir.rfind('/')]
-        #         send_string_as_kb("ok")
-        #     elif not os.path.exists(working_dir + '/' + lst[1]):
-        #         send_string_as_kb("Directory " + working_dir + '/' + lst[1] + " not exists")
-        #     else:
-        #         working_dir += '/' + lst[1]
-        #         send_string_as_kb("ok")
         else:
-            # lst = list(map(str, command.split()))
-            # command = lst[0]
-            # for i in range(1, len(lst)):
-            #     if lst[i][0] != '-':
-            #         command += ' ' + working_dir + '/' + lst[i]
-            #
-            # if len(lst) == 1:
-            #     command += ' ' + working_dir
-
             p = Popen([command], stdout = PIPE, stderr = PIPE, shell=True)
             output, error = p.communicate()
             if p.returncode == 0:
