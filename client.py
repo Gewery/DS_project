@@ -62,27 +62,21 @@ def send_string_as_kb(st):
     kb += encoded_command
     s.send(kb)  # send command with 0-bytes in the beginning
 
-
 print(
     'commands:\nupload file: uf [location on localhost] [location on server (with name of file)]\n'
     'download file: df [location of file on server] [location on localhost (with name of file)]\n')
 
-nameserver_address, nameserver_port = "3.134.102.205", 8800
+nameserver_address, nameserver_port = "18.218.164.132", 8800
 storage_port = 8800
 s = socket.socket()
 s.connect((nameserver_address, nameserver_port))
 
-storage_addr_bytes = s.recv(4)
-storage_addr = ""
-for x in storage_addr_bytes:
-    storage_addr += str(x) + '.'
-storage_addr = storage_addr[:-1]
-print('Storage server address:', storage_addr)
-
-s.close()
-
-s = socket.socket()
-s.connect((storage_addr, storage_port))
+# storage_addr_bytes = s.recv(4)
+# storage_addr = ""
+# for x in storage_addr_bytes:
+#     storage_addr += str(x) + '.'
+# storage_addr = storage_addr[:-1]
+# print('Storage server address:', storage_addr)
 
 working_dir = '~'
 

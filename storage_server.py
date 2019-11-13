@@ -87,15 +87,15 @@ while True:
 
     while True:
         command = recieve_string() # TODO handle syntax errors
-
+        print('recieved string:', command)
         if len(command) == 0:
             break
 
-        if command[:2] == 'uf':
+        if command[:2] == 'uf': # TODO
             command, client_location, server_location = map(str, command.split())
             server_location = working_dir + server_location
             recieve_file(server_location)
-        elif command[:2] == 'df':
+        elif command[:2] == 'df': # TODO
             command, server_location, client_location = map(str, command.split())
             server_location = working_dir + server_location
             send_file(server_location)
