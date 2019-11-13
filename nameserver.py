@@ -133,7 +133,7 @@ def concat_path(path_1, path_2, path_3 = ''):
     return result
 
 def add_to_command(command, to_add):
-    if command[:10] == 'send file:':
+    if command[:10] == 'send file:' or command[:13] == 'recieve file:':
         return command
     lst = list(map(str, command.split()))
     command = lst[0]
@@ -192,7 +192,16 @@ while True:
             command, file_location_client, file_location_server = map(str, command.split())
             file_location_server = concat_path(working_dir, file_location_server)
 
-
+            server_connection = server_connections[0] # TODO taje available server
+            server_connection.commands_to_send_p1.append(('recieve file:' + concat_path(root, file_location_server), 'recieved'))
+            send_string_to_client('send file to:' + server_connection.address_for_client)
+            if file_location_server not in servers_with_file:
+                servers_with_file[file_location_server] = []
+            servers_with_file[file_location_server].append(server_connection)
+            p = Popen(['touch ' + concat_path(root, file_location_server)], stdout=PIPE, stderr=PIPE, shell=True)
+            output, error = p.communicate()
+            if p.returncode != 0:
+                print(error.decode('utf-8'))
         elif command[:2] == 'df': 
             lst = list(map(str, command.split()))
             if len(lst) > 3:
@@ -208,7 +217,7 @@ while True:
                 if len(servers_with_file[file_location_server]) == 0: # TODO ?
                     print('Wow, File not found on any servers')
                     continue
-                server_connection = servers_with_file[file_location_server][0]
+                server_connection = servers_with_file[file_location_server][0] #TODO take available server
                 send_string_to_client('recieve file from:' + server_connection.address_for_client)
                 server_connection.commands_to_send_p1.append(('send file:' + concat_path(root, file_location_server), 'sent'))
         else:

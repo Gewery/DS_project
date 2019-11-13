@@ -5,7 +5,7 @@ import sys
 from subprocess import Popen, PIPE
 
 
-def recieve_file(file_location_server): # run when client wants to upload file
+def recieve_file(con, file_location_server): # run when client wants to upload file
     if os.path.exists(file_location_server):
         print('File already exists, saving it as: ', end='')
         file_location_server, ext = file_location_server[:file_location_server.rfind('.')], file_location_server[file_location_server.rfind('.') + 1:]
@@ -29,9 +29,7 @@ def recieve_file(file_location_server): # run when client wants to upload file
     print('file ' + file_location_server + ' recieved')
 
 def send_file(connection, file_location_server): # run when client want to download file
-    print('DEBUG: send_file function')
-
-    f = open(file_location_server, 'rb')
+    f = open(file_location_server, 'rb') # TODO check if file exists
     to_send = []
     chunk = f.read(1024)
     while chunk:
@@ -99,12 +97,12 @@ while True:
         if len(command) == 0:
             break
 
-        if command[:2] == 'uf': # TODO
+        if command[:13] == 'recieve file:':
+            file_location_server = command[13:]
             connection = wait_for_connection()
-
-            command, file_location_client, file_location_server = map(str, command.split())
-            file_location_server = working_dir + file_location_server
-            recieve_file(file_location_server)
+            recieve_file(connection, file_location_server)
+            send_string_to_s(con, 'recieved')
+            connection.close()
         elif command[:10] == 'send file:':
             file_location_server = command[10:]
             connection = wait_for_connection()

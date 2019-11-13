@@ -4,18 +4,18 @@ import time
 import sys
 
 
-def upload_file(client_location):
-    f = open(client_location, 'rb')
+def upload_file(sock, client_location):
+    f = open(client_location, 'rb') # TODO check if file exists
     to_send = []
     chunk = f.read(1024)
     while chunk:
         to_send.append(chunk)
         chunk = f.read(1024)
 
-    send_string_as_kb(str(len(to_send)), s)
+    send_string_as_kb(str(len(to_send)), sock)
 
     for kb in to_send:
-        s.send(kb)
+        sock.send(kb)
 
     f.close()
 
@@ -93,8 +93,13 @@ while True:
         working_dir = ''
     elif command[:2] == 'uf': # TODO white list of commands?
         command, client_location, server_location = map(str, command.split())
-        upload_file(client_location)
-        print('DEBUG: ' + command + ' from ' + client_location + ' to ' + server_location)
+        recieve_st = recieve_string(s)
+        if recieve_st[:13] != 'send file to:':
+            print('Error occured. Recieved command from nameserver:', recieve_st)
+        else:
+            ss_addr = recieve_st[13:]
+            sock = connect_to(ss_addr)
+            upload_file(sock, client_location)
     elif command[:2] == 'df':
         command, server_location, client_location = map(str, command.split())
         recieve_st = recieve_string(s)
