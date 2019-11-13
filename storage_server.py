@@ -5,50 +5,49 @@ import sys
 from subprocess import Popen, PIPE
 
 
-def recieve_file(server_location): # run when client wants to upload file
-    print('DEBUG: recieve_file function')
-    if os.path.exists(server_location):
+def recieve_file(file_location_server): # run when client wants to upload file
+    if os.path.exists(file_location_server):
         print('File already exists, saving it as: ', end='')
-        server_location, ext = server_location[:server_location.rfind('.')], server_location[server_location.rfind('.') + 1:]
+        file_location_server, ext = file_location_server[:file_location_server.rfind('.')], file_location_server[file_location_server.rfind('.') + 1:]
 
         number = 1
-        while os.path.exists(server_location + '_copy' + str(number)):
+        while os.path.exists(file_location_server + '_copy' + str(number)):
             number += 1
 
-        server_location += '_copy' + str(number) + '.' + ext
+        file_location_server += '_copy' + str(number) + '.' + ext
 
-        print(server_location)
+        print(file_location_server)
 
-    f = open(server_location, 'wb+')
-    number_of_kb = int(recieve_string())
+    f = open(file_location_server, 'wb+')
+    number_of_kb = int(recieve_string(con))
 
     for i in range(number_of_kb):
         f.write(con.recv(1024))
 
     f.close()
 
-    print('file ' + server_location + ' recieved')
+    print('file ' + file_location_server + ' recieved')
 
-def send_file(server_location): # run when client want to download file
+def send_file(connection, file_location_server): # run when client want to download file
     print('DEBUG: send_file function')
 
-    f = open(server_location, 'rb')
+    f = open(file_location_server, 'rb')
     to_send = []
     chunk = f.read(1024)
     while chunk:
         to_send.append(chunk)
         chunk = f.read(1024)
 
-    send_string_as_kb(str(len(to_send)))
+    send_string_to_s(connection, str(len(to_send)))
 
     for kb in to_send:
-        con.send(kb)
+        connection.send(kb)
 
     f.close()
 
-    print('file ' + server_location + ' sent')
+    print('file ' + file_location_server + ' sent')
 
-def recieve_string():
+def recieve_string(con):
     try:
         st = bytearray(con.recv(1024))
     except:
@@ -62,7 +61,7 @@ def recieve_string():
 
     return st.decode('utf-8')
 
-def send_string_as_kb(st):
+def send_string_to_s(con, st):
     encoded_command = bytes(st, 'utf-8')
     kb = bytearray()
     for i in range(1024 - len(encoded_command)):
@@ -70,12 +69,21 @@ def send_string_as_kb(st):
     kb += encoded_command
     con.send(kb)  # send command with 0-bytes in the beginning
 
+def wait_for_connection():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(('', 8802))
+    sock.listen()
+    connection, addr = sock.accept()
+    return connection
+
+
 # def return_syntax_error(st):
-#     send_string_as_kb("Syntax error in recieved command:" + st)
+#     send_string_to_s("Syntax error in recieved command:" + st)
 
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-s.bind(('', 8800))
+s.bind(('', 8801))
 s.listen()
 
 root_dir = 'mount'
@@ -86,23 +94,27 @@ while True:
     print(str(addr) + 'connected')
 
     while True:
-        command = recieve_string() # TODO handle syntax errors
+        command = recieve_string(con) # TODO handle syntax errors
         print('recieved string:', command)
         if len(command) == 0:
             break
 
         if command[:2] == 'uf': # TODO
-            command, client_location, server_location = map(str, command.split())
-            server_location = working_dir + server_location
-            recieve_file(server_location)
-        elif command[:2] == 'df': # TODO
-            command, server_location, client_location = map(str, command.split())
-            server_location = working_dir + server_location
-            send_file(server_location)
+            connection = wait_for_connection()
+
+            command, file_location_client, file_location_server = map(str, command.split())
+            file_location_server = working_dir + file_location_server
+            recieve_file(file_location_server)
+        elif command[:10] == 'send file:':
+            file_location_server = command[10:]
+            connection = wait_for_connection()
+            send_file(connection, file_location_server)
+            send_string_to_s(con, 'sent')
+            connection.close()
         else:
             p = Popen([command], stdout = PIPE, stderr = PIPE, shell=True)
             output, error = p.communicate()
             if p.returncode == 0:
-                send_string_as_kb(output.decode('utf-8'))
+                send_string_to_s(con, output.decode('utf-8'))
             else:
-                send_string_as_kb(error.decode('utf-8'))
+                send_string_to_s(con, error.decode('utf-8'))

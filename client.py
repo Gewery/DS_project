@@ -12,7 +12,7 @@ def upload_file(client_location):
         to_send.append(chunk)
         chunk = f.read(1024)
 
-    send_string_as_kb(str(len(to_send)))  # TODO probably will need to add some 0-s in the last kb
+    send_string_as_kb(str(len(to_send)), s)
 
     for kb in to_send:
         s.send(kb)
@@ -22,7 +22,7 @@ def upload_file(client_location):
     print('file ' + client_location + ' sent')
 
 
-def download_file(client_location):
+def download_file(sock, client_location):
     if os.path.exists(client_location):
         print('File already exists, saving it as: ', end='')
         client_location, ext = client_location[:client_location.rfind('.')], client_location[client_location.rfind('.') + 1:]
@@ -36,17 +36,17 @@ def download_file(client_location):
         print(client_location)
 
     f = open(client_location, 'wb+')
-    number_of_kb = int(recieve_string())
+    number_of_kb = int(recieve_string(sock))
 
     for i in range(number_of_kb):
-        f.write(s.recv(1024))
+        f.write(sock.recv(1024))
 
     f.close()
 
     print('file ' + client_location + ' recieved')
 
 
-def recieve_string():
+def recieve_string(s):
     st = bytearray(s.recv(1024))
     while len(st) != 0 and st[0] == 0:
         st.remove(0)
@@ -54,7 +54,7 @@ def recieve_string():
     return st.decode('utf-8')
 
 
-def send_string_as_kb(st):
+def send_string_as_kb(st, s):
     encoded_command = bytes(st, 'utf-8')
     kb = bytearray()
     for i in range(1024 - len(encoded_command)):
@@ -62,15 +62,20 @@ def send_string_as_kb(st):
     kb += encoded_command
     s.send(kb)  # send command with 0-bytes in the beginning
 
+def connect_to(ss_addr):
+    sock = socket.socket()
+    sock.connect((ss_addr, storage_port))
+    return sock
+
 print(
     'commands:\nupload file: uf [location on localhost] [location on server (with name of file)]\n'
     'download file: df [location of file on server] [location on localhost (with name of file)]\n')
 
 nameserver_address, nameserver_port = "18.218.164.132", 8800
-storage_port = 8800
+storage_port = 8802
 s = socket.socket()
 s.connect((nameserver_address, nameserver_port))
-working_dir = recieve_string()
+working_dir = recieve_string(s)
 
 # storage_addr_bytes = s.recv(4)
 # storage_addr = ""
@@ -82,18 +87,25 @@ working_dir = recieve_string()
 while True:
     command = input('~' + working_dir + '> ')
 
-    send_string_as_kb(command)
+    send_string_as_kb(command, s)
 
-    if command[:2] == 'uf': # TODO while list of commands?
+    if command == 'init':
+        working_dir = ''
+    elif command[:2] == 'uf': # TODO white list of commands?
         command, client_location, server_location = map(str, command.split())
         upload_file(client_location)
         print('DEBUG: ' + command + ' from ' + client_location + ' to ' + server_location)
     elif command[:2] == 'df':
         command, server_location, client_location = map(str, command.split())
-        download_file(client_location)
-        print('DEBUG: ' + command + ' from ' + client_location + ' to ' + server_location)
+        recieve_st = recieve_string(s)
+        if recieve_st[:18] != 'recieve file from:':
+            print('Error occured. Recieved command from nameserver:', recieve_st)
+        else:
+            ss_addr = recieve_st[18:]
+            sock = connect_to(ss_addr)
+            download_file(sock, client_location)
     else:
-        recieve_st = recieve_string()
+        recieve_st = recieve_string(s)
         if command == "ls":
             recieve_st = recieve_st.replace('\n', ' ')
 
