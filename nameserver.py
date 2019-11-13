@@ -132,10 +132,10 @@ def send_command_to_servers(command, correct_response, priority = 1): # TODO rem
 
 def distrubute_file(file):
     for server_from in servers_with_file[file]:
-        for server_to in servers:
+        for server_to in server_connections:
             if server_to in servers_with_file[file]:
                 continue
-            server_from.commands_to_send_p2.append(('send file:' + concat_path(root, file) + str(port_p2), 'sent'))
+            server_from.commands_to_send_p2.append(('send file:' + concat_path(root, file) + 'addr:' + server_to.address + str(port_p2), 'sent'))
             server_to.commands_to_send_p2.append(('recieve file:' + concat_path(root, file) + str(port_p2), 'recieved'))
 
 def concat_path(path_1, path_2, path_3 = ''):

@@ -1,8 +1,9 @@
 import os
 import socket
-import time
 from subprocess import Popen, PIPE
+import multiprocessing
 
+timeout = 5 # 5 seconds to connect to another ss
 
 def recieve_file(con, file_location_server): # run when client wants to upload file
     if os.path.exists(file_location_server):
@@ -11,10 +12,6 @@ def recieve_file(con, file_location_server): # run when client wants to upload f
             con.recv(1024)
         print('file ' + file_location_server + ' already exists (skipped)')
         return 'recieved'
-
-    #TODO Add timeouts to handle fallen servers
-
-    start_time = time.time()
 
     f = open(file_location_server, 'wb+')
     number_of_kb = int(recieve_string(con))
@@ -38,8 +35,6 @@ def send_file(connection, file_location_server): # run when client want to downl
     while chunk:
         to_send.append(chunk)
         chunk = f.read(1024)
-
-    # TODO Add timeouts
 
     send_string_to_s(connection, str(len(to_send)))
 
@@ -73,17 +68,35 @@ def send_string_to_s(con, st):
     kb += encoded_command
     con.send(kb)  # send command with 0-bytes in the beginning
 
+def connect(socket, addr, port):
+    socket.connect((addr, port))
+
+accept_connection_return_value = ()
+def accept_connection(sock, return_dict):
+    return_dict['rv'] = sock.accept()
+
 def wait_for_connection(port):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(('', port))
     sock.listen()
-    connection, addr = sock.accept()
-    return connection
 
+    # added timeouts to not wait fallen server to communicate
+    manager = multiprocessing.Manager()
+    return_dict = manager.dict()
 
-# def return_syntax_error(st):
-#     send_string_to_s("Syntax error in recieved command:" + st)
+    p = multiprocessing.Process(target=accept_connection, args=(sock, return_dict))
+    p.start()
+    p.join(timeout)
+
+    if p.is_alive():
+        print('Timeout exceeded')
+        p.terminate()
+        p.join()
+        return -1
+    else:
+        connection, addr = return_dict['rv']
+        return connection
 
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -92,6 +105,7 @@ s.listen()
 
 root_dir = 'mount'
 working_dir = root_dir
+port_p2 = 8803
 
 while True:
     con, addr = s.accept()
@@ -107,16 +121,37 @@ while True:
             file_location_server = command[13:-4]
             port = int(command[-4:])
             connection = wait_for_connection(port)
-            response = recieve_file(connection, file_location_server)
-            send_string_to_s(con, response)
-            connection.close()
+            if connection == -1:
+                send_string_to_s(con, 'Timeout exceeded')
+            else:
+                response = recieve_file(connection, file_location_server)
+                send_string_to_s(con, response)
+                connection.close()
         elif command[:10] == 'send file:':
             file_location_server = command[10:-4]
             port = int(command[-4:])
-            connection = wait_for_connection(port)
-            response = send_file(connection, file_location_server)
-            send_string_to_s(con, response)
-            connection.close()
+            if port == port_p2:
+                socket = socket.socket()
+                addr = command[command.rfind('addr:') + 5:-4]
+                # added timeouts to not wait fallen server to communicate
+                p = multiprocessing.Process(target=connect, args=(socket, addr, port))
+                p.start()
+                p.join(timeout)
+
+                if p.is_alive():
+                    print('Timeout exceeded')
+                    p.terminate()
+                    p.join()
+                    send_string_to_s(con, 'Timeout exceeded')
+                else:
+                    file_location_server = command[10:command.rfind('addr:')]
+                    response = send_file(socket, file_location_server)
+                    send_string_to_s(con, response)
+            else:
+                connection = wait_for_connection(port)
+                response = send_file(connection, file_location_server)
+                send_string_to_s(con, response)
+                connection.close()
         else:
             p = Popen([command], stdout = PIPE, stderr = PIPE, shell=True)
             output, error = p.communicate()
