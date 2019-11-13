@@ -27,32 +27,44 @@ class ServerConnection(Thread):
                 if response != correct_response:
                     print('Command ' + add_to_command(command, root) + ' not executed on server ' + self.address + '. Trying again')
                     self.commands_to_send_p1.insert(0, (command, correct_response))
-                elif command[:6] == 'touch ':
-                    for file in list(map(str, command.split()))[1:]:
-                        if file not in servers_with_file:
-                            servers_with_file[file] = []
-                        servers_with_file[file].append(self)
-                elif command[:3] == 'rm ':
-                    rf = 0
-                    if command[1] == '-rf':
-                        rf = 1
-                    for file in list(map(str, command.split()))[1 + rf:]:
-                        for key in servers_with_file.keys(): # rm -rf support
-                            if key.find(file) == 0:
-                                if file in servers_with_file and self in servers_with_file[file]:
-                                    servers_with_file[key].remove(self)
-                                    if len(servers_with_file[file]) == 0:
-                                        servers_with_file.pop(file)
+                else:
+                    if command[:6] == 'touch ':
+                        for file in list(map(str, command.split()))[1:]:
+                            if file not in servers_with_file:
+                                servers_with_file[file] = []
+                            if self not in servers_with_file[file]:
+                                servers_with_file[file].append(self)
+                    elif command[:3] == 'rm ':
+                        rf = 0
+                        if command[1] == '-rf':
+                            rf = 1
+                        for file in list(map(str, command.split()))[1 + rf:]:
+                            for key in servers_with_file.keys(): # rm -rf support
+                                if key.find(file) == 0:
+                                    if file in servers_with_file and self in servers_with_file[file]:
+                                        servers_with_file[key].remove(self)
+                                        if len(servers_with_file[file]) == 0:
+                                            servers_with_file.pop(file)
+                    continue
 
                     
-            if len(self.commands_to_send_p2) > 0:
+            if len(self.commands_to_send_p2) > 0: # replication commands only
                 command, correct_response = self.commands_to_send_p2.pop(0)
-                self._send_string(command)
+                print('p2 executing: ' + command + ' and waiting for >' + correct_response + '<')
+                self._send_string(add_to_command(command, root))
                 response = self._recieve_string()
+                print('p2 got response >' + response + '<')
                 if response != correct_response:
                     print(
-                        'Wow, Command ' + command + ' not executed on server ' + self.address + '. Trying again')
-                    self.commands_to_send_p2.insert(0, (command, correct_response))
+                        'Command ' + command + ' was not executed on server ' + self.address + '. Will try again later')
+                    self.commands_to_send_p2.append((command, correct_response))
+                elif command[:13] == 'recieve file:':
+                    file_name = command[13:-4]
+                    print('I know that ' + file_name + ' was recieved by ' + self.address);
+                    if file_name not in servers_with_file: servers_with_file[file] = []
+                    if self not in servers_with_file[file_name]:
+                        servers_with_file[file_name].append(self)
+
 
     def _send_string(self, st):
         print('sending string to server:', st)
@@ -100,6 +112,8 @@ servers = [('3.15.137.86', '3.15.137.86')]
 servers_online = ['3.15.137.86']
 storage_port = 8801
 servers_with_file = {} # stores connections
+port_p2 = 8803
+port_p1 = 8802
 
 def connect_to_servers():
     for storage_addr, storage_addr_for_client in servers:
@@ -107,7 +121,7 @@ def connect_to_servers():
         server_connections.append(s_sender)
         s_sender.start()
 
-def send_command_to_servers(command, correct_response, priority = 1):
+def send_command_to_servers(command, correct_response, priority = 1): # TODO remove priority from here
     for s_sender in server_connections:
         if priority == 1:
             s_sender.commands_to_send_p1.append((command, correct_response))
@@ -116,6 +130,13 @@ def send_command_to_servers(command, correct_response, priority = 1):
             s_sender.commands_to_send_p2.append((command, correct_response))
             print(command + ' added to queue p2. Correct response = ' + correct_response)
 
+def distrubute_file(file):
+    for server_from in servers_with_file[file]:
+        for server_to in servers:
+            if server_to in servers_with_file[file]:
+                continue
+            server_from.commands_to_send_p2.append(('send file:' + concat_path(root, file) + str(port_p2), 'sent'))
+            server_to.commands_to_send_p2.append(('recieve file:' + concat_path(root, file) + str(port_p2), 'recieved'))
 
 def concat_path(path_1, path_2, path_3 = ''):
     result = path_1
@@ -129,6 +150,8 @@ def concat_path(path_1, path_2, path_3 = ''):
         if path_3[0] == '/':
             path_3 = path_3[1:]
         result += '/' + path_3
+
+    result = result.rstrip()
 
     return result
 
@@ -149,7 +172,6 @@ def add_to_command(command, to_add):
         command += ' ' + to_add
 
     return command
-
 
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -183,7 +205,7 @@ while True:
             p = Popen(['mkdir mount'], stdout=PIPE, stderr=PIPE, shell=True)
             output, error = p.communicate()
             send_command_to_servers('mkdir ', output.decode('utf-8'))
-        elif command[:2] == 'uf': # TODO
+        elif command[:2] == 'uf':
             lst = list(map(str, command.split()))
             if len(lst) > 3:
                 send_string_to_client("Wrong format of command: " + command)
@@ -192,16 +214,22 @@ while True:
             command, file_location_client, file_location_server = map(str, command.split())
             file_location_server = concat_path(working_dir, file_location_server)
 
-            server_connection = server_connections[0] # TODO taje available server
-            server_connection.commands_to_send_p1.append(('recieve file:' + concat_path(root, file_location_server), 'recieved'))
-            send_string_to_client('send file to:' + server_connection.address_for_client)
-            if file_location_server not in servers_with_file:
+            if file_location_server in servers_with_file:
+                send_string_to_client('File ' + file_location_server + ' already exists. Choose another name')
+            else:
+                server_connection = server_connections[0] # TODO take available server
+                server_connection.commands_to_send_p1.append(('recieve file:' + concat_path(root, file_location_server) + str(port_p1), 'recieved'))
+                send_string_to_client('send file to:' + server_connection.address_for_client + str(port_p1))
+
                 servers_with_file[file_location_server] = []
-            servers_with_file[file_location_server].append(server_connection)
-            p = Popen(['touch ' + concat_path(root, file_location_server)], stdout=PIPE, stderr=PIPE, shell=True)
-            output, error = p.communicate()
-            if p.returncode != 0:
-                print(error.decode('utf-8'))
+                servers_with_file[file_location_server].append(server_connection)
+                p = Popen(['touch ' + concat_path(root, file_location_server)], stdout=PIPE, stderr=PIPE, shell=True)
+                output, error = p.communicate()
+                if p.returncode != 0:
+                    print(error.decode('utf-8'))
+                else:
+                    distrubute_file(file_location_server)
+
         elif command[:2] == 'df': 
             lst = list(map(str, command.split()))
             if len(lst) > 3:
@@ -214,12 +242,12 @@ while True:
             if file_location_server not in servers_with_file:
                 send_string_to_client('File ' + file_location_server + ' does not exists')
             else:
-                if len(servers_with_file[file_location_server]) == 0: # TODO ?
+                if len(servers_with_file[file_location_server]) == 0: # There is nothing we can do
                     print('Wow, File not found on any servers')
                     continue
                 server_connection = servers_with_file[file_location_server][0] #TODO take available server
-                send_string_to_client('recieve file from:' + server_connection.address_for_client)
-                server_connection.commands_to_send_p1.append(('send file:' + concat_path(root, file_location_server), 'sent'))
+                send_string_to_client('recieve file from:' + server_connection.address_for_client + str(port_p1))
+                server_connection.commands_to_send_p1.append(('send file:' + concat_path(root, file_location_server) + str(port_p1), 'sent'))
         else:
             lst = list(map(str, command.split()))
             # command = add_root_and_wd_to_command(command)

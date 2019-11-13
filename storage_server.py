@@ -1,22 +1,20 @@
 import os
 import socket
-import subprocess
-import sys
+import time
 from subprocess import Popen, PIPE
 
 
 def recieve_file(con, file_location_server): # run when client wants to upload file
     if os.path.exists(file_location_server):
-        print('File already exists, saving it as: ', end='')
-        file_location_server, ext = file_location_server[:file_location_server.rfind('.')], file_location_server[file_location_server.rfind('.') + 1:]
+        number_of_kb = int(recieve_string(con))
+        for i in range(number_of_kb):
+            con.recv(1024)
+        print('file ' + file_location_server + ' already exists (skipped)')
+        return 'recieved'
 
-        number = 1
-        while os.path.exists(file_location_server + '_copy' + str(number)):
-            number += 1
+    #TODO Add timeouts to handle fallen servers
 
-        file_location_server += '_copy' + str(number) + '.' + ext
-
-        print(file_location_server)
+    start_time = time.time()
 
     f = open(file_location_server, 'wb+')
     number_of_kb = int(recieve_string(con))
@@ -27,14 +25,21 @@ def recieve_file(con, file_location_server): # run when client wants to upload f
     f.close()
 
     print('file ' + file_location_server + ' recieved')
+    return 'recieved'
 
 def send_file(connection, file_location_server): # run when client want to download file
-    f = open(file_location_server, 'rb') # TODO check if file exists
+    if not os.path.exists(file_location_server): # in case this file already deleted by rm command
+        send_string_to_s(connection, str(0))
+        return 'sent'
+
+    f = open(file_location_server, 'rb')
     to_send = []
     chunk = f.read(1024)
     while chunk:
         to_send.append(chunk)
         chunk = f.read(1024)
+
+    # TODO Add timeouts
 
     send_string_to_s(connection, str(len(to_send)))
 
@@ -44,6 +49,7 @@ def send_file(connection, file_location_server): # run when client want to downl
     f.close()
 
     print('file ' + file_location_server + ' sent')
+    return 'sent'
 
 def recieve_string(con):
     try:
@@ -67,10 +73,10 @@ def send_string_to_s(con, st):
     kb += encoded_command
     con.send(kb)  # send command with 0-bytes in the beginning
 
-def wait_for_connection():
+def wait_for_connection(port):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind(('', 8802))
+    sock.bind(('', port))
     sock.listen()
     connection, addr = sock.accept()
     return connection
@@ -98,16 +104,18 @@ while True:
             break
 
         if command[:13] == 'recieve file:':
-            file_location_server = command[13:]
-            connection = wait_for_connection()
-            recieve_file(connection, file_location_server)
-            send_string_to_s(con, 'recieved')
+            file_location_server = command[13:-4]
+            port = int(command[-4:])
+            connection = wait_for_connection(port)
+            response = recieve_file(connection, file_location_server)
+            send_string_to_s(con, response)
             connection.close()
         elif command[:10] == 'send file:':
-            file_location_server = command[10:]
-            connection = wait_for_connection()
-            send_file(connection, file_location_server)
-            send_string_to_s(con, 'sent')
+            file_location_server = command[10:-4]
+            port = int(command[-4:])
+            connection = wait_for_connection(port)
+            response = send_file(connection, file_location_server)
+            send_string_to_s(con, response)
             connection.close()
         else:
             p = Popen([command], stdout = PIPE, stderr = PIPE, shell=True)

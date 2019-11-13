@@ -62,9 +62,9 @@ def send_string_as_kb(st, s):
     kb += encoded_command
     s.send(kb)  # send command with 0-bytes in the beginning
 
-def connect_to(ss_addr):
+def connect_to(ss_addr, ss_port):
     sock = socket.socket()
-    sock.connect((ss_addr, storage_port))
+    sock.connect((ss_addr, ss_port))
     return sock
 
 print(
@@ -72,7 +72,6 @@ print(
     'download file: df [location of file on server] [location on localhost (with name of file)]\n')
 
 nameserver_address, nameserver_port = "18.218.164.132", 8800
-storage_port = 8802
 s = socket.socket()
 s.connect((nameserver_address, nameserver_port))
 working_dir = recieve_string(s)
@@ -97,8 +96,9 @@ while True:
         if recieve_st[:13] != 'send file to:':
             print('Error occured. Recieved command from nameserver:', recieve_st)
         else:
-            ss_addr = recieve_st[13:]
-            sock = connect_to(ss_addr)
+            ss_addr = recieve_st[13:-4]
+            ss_port = int(recieve_st[-4:])
+            sock = connect_to(ss_addr, ss_port)
             upload_file(sock, client_location)
     elif command[:2] == 'df':
         command, server_location, client_location = map(str, command.split())
@@ -106,8 +106,9 @@ while True:
         if recieve_st[:18] != 'recieve file from:':
             print('Error occured. Recieved command from nameserver:', recieve_st)
         else:
-            ss_addr = recieve_st[18:]
-            sock = connect_to(ss_addr)
+            ss_addr = recieve_st[18:-4]
+            ss_port = int(recieve_st[-4:])
+            sock = connect_to(ss_addr, ss_port)
             download_file(sock, client_location)
     else:
         recieve_st = recieve_string(s)
