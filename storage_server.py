@@ -131,10 +131,10 @@ while True:
             file_location_server = command[10:-4]
             port = int(command[-4:])
             if port == port_p2:
-                socket = socket.socket()
+                sock = socket.socket()
                 addr = command[command.rfind('addr:') + 5:-4]
                 # added timeouts to not wait fallen server to communicate
-                p = multiprocessing.Process(target=connect, args=(socket, addr, port))
+                p = multiprocessing.Process(target=connect, args=(sock, addr, port))
                 p.start()
                 p.join(timeout)
 
@@ -145,7 +145,7 @@ while True:
                     send_string_to_s(con, 'Timeout exceeded')
                 else:
                     file_location_server = command[10:command.rfind('addr:')]
-                    response = send_file(socket, file_location_server)
+                    response = send_file(sock, file_location_server)
                     send_string_to_s(con, response)
             else:
                 connection = wait_for_connection(port)

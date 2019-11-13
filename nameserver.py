@@ -1,6 +1,4 @@
 import socket
-import os
-import time
 from subprocess import Popen, PIPE
 from threading import Thread
 
@@ -61,9 +59,10 @@ class ServerConnection(Thread):
                 elif command[:13] == 'recieve file:':
                     file_name = command[13:-4]
                     print('I know that ' + file_name + ' was recieved by ' + self.address);
-                    if file_name not in servers_with_file: servers_with_file[file] = []
+                    if file_name not in servers_with_file: servers_with_file[file_name] = []
                     if self not in servers_with_file[file_name]:
                         servers_with_file[file_name].append(self)
+                    distrubute_file(file_name)
 
 
     def _send_string(self, st):
@@ -108,8 +107,8 @@ def send_string_to_client(st):
 
 
 server_connections = []
-servers = [('3.15.137.86', '3.15.137.86')]
-servers_online = ['3.15.137.86']
+servers = [('3.15.137.86', '3.15.137.86'), ('52.15.138.129', '52.15.138.129'), ('3.134.114.103', '3.134.114.103')]
+# servers_online = ['3.15.137.86']
 storage_port = 8801
 servers_with_file = {} # stores connections
 port_p2 = 8803
@@ -261,7 +260,10 @@ while True:
                 if command[:3] == 'cd ':
                     if lst[1] == '..':
                         if len(working_dir) != 0:
-                            working_dir = working_dir[:working_dir.rfind('/')]
+                            if working_dir.rfind('/') == -1:
+                                working_dir = ''
+                            else:
+                                working_dir = working_dir[:working_dir.rfind('/')]
                     else:
                         working_dir = concat_path(working_dir, lst[1])
                     send_string_to_client("cd_command_ok" + working_dir)
