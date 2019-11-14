@@ -1,4 +1,5 @@
 import socket
+import time
 from subprocess import Popen, PIPE
 from threading import Thread
 
@@ -6,16 +7,50 @@ class ServerConnection(Thread):
     def __init__(self, address: str, port: int, address_for_client: str):
         super().__init__(daemon=True)
         self.socket = socket.socket()
-        self.socket.connect((address, port))
+        try:
+            self.socket.connect((address, port))
+            server_connections_online.append(self)
+        except:
+            pass
         self.address = address
         self.address_for_client = address_for_client
         # Queues contains commands to send with different priority
         self.commands_to_send_p1 = [] #[(command, correct_response), (), ..., ()]
         self.commands_to_send_p2 = []
+        self.last_checked = time.time()
 
-    def run(self): # TODO add online_servers support
+    def reconnect(self):
+        print('reconnecting to server' + self.address)
+        try:
+            self.socket = socket.socket()
+            self.socket.connect((self.address, storage_port))
+            server_connections_online.append(self)
+            print('reconnected')
+        except:
+            self.last_checked = time.time()
+            print('reconnection failed')
+            pass
+
+    def ping(self):
+        # print('pinging...')
+        self._send_string('ping')
+        if self._recieve_string() == 'ping':
+            # print('success')
+            return True
+        else:
+            # print('fail')
+            return False
+
+    def run(self):
         print('Thread started, address: ' + self.address)
         while True:
+            if time.time() - self.last_checked > ping_timeout:
+                if self not in server_connections_online:
+                    self.reconnect()
+                elif not self.ping():
+                    server_connections_online.remove(self)
+                self.last_checked = time.time()
+
             if len(self.commands_to_send_p1) > 0:
                 command, correct_response = self.commands_to_send_p1.pop(0)
                 print('executing: ' + command + ' and waiting for >' + correct_response + '<')
@@ -32,6 +67,12 @@ class ServerConnection(Thread):
                                 servers_with_file[file] = []
                             if self not in servers_with_file[file]:
                                 servers_with_file[file].append(self)
+                    elif command[:3] == 'cp ':
+                        file = list(map(str, command.split()))[2]
+                        if file not in servers_with_file:
+                            servers_with_file[file] = []
+                        if self not in servers_with_file[file]:
+                            servers_with_file[file].append(self)
                     elif command[:3] == 'rm ':
                         rf = 0
                         if command[1] == '-rf':
@@ -66,7 +107,8 @@ class ServerConnection(Thread):
 
 
     def _send_string(self, st):
-        print('sending string to server:', st)
+        if st != 'ping':
+            print('sending string to server:', st)
         encoded_command = bytes(st, 'utf-8')
         kb = bytearray()
         for i in range(1024 - len(encoded_command)):
@@ -81,6 +123,7 @@ class ServerConnection(Thread):
 
         return st.decode('utf-8')
 
+ping_timeout = 5
 
 def recieve_string_from_client():
     try:
@@ -107,8 +150,8 @@ def send_string_to_client(st):
 
 
 server_connections = []
+server_connections_online = []
 servers = [('3.15.137.86', '3.15.137.86'), ('52.15.138.129', '52.15.138.129'), ('3.134.114.103', '3.134.114.103')]
-# servers_online = ['3.15.137.86']
 storage_port = 8801
 servers_with_file = {} # stores connections
 port_p2 = 8803
@@ -120,14 +163,10 @@ def connect_to_servers():
         server_connections.append(s_sender)
         s_sender.start()
 
-def send_command_to_servers(command, correct_response, priority = 1): # TODO remove priority from here
+def send_command_to_servers(command, correct_response):
     for s_sender in server_connections:
-        if priority == 1:
-            s_sender.commands_to_send_p1.append((command, correct_response))
-            print(command + ' added to queue p1. Correct response = ' + correct_response)
-        else:
-            s_sender.commands_to_send_p2.append((command, correct_response))
-            print(command + ' added to queue p2. Correct response = ' + correct_response)
+        s_sender.commands_to_send_p1.append((command, correct_response))
+        print(command + ' added to queue p1. Correct response = ' + correct_response)
 
 def distrubute_file(file):
     for server_from in servers_with_file[file]:
@@ -216,7 +255,10 @@ while True:
             if file_location_server in servers_with_file:
                 send_string_to_client('File ' + file_location_server + ' already exists. Choose another name')
             else:
-                server_connection = server_connections[0] # TODO take available server
+                while len(server_connections_online) == 0:
+                    print('Waiting for any storage server to turn on')
+                    time.sleep(5)
+                server_connection = server_connections_online[0]
                 server_connection.commands_to_send_p1.append(('recieve file:' + concat_path(root, file_location_server) + str(port_p1), 'recieved'))
                 send_string_to_client('send file to:' + server_connection.address_for_client + str(port_p1))
 
@@ -244,12 +286,21 @@ while True:
                 if len(servers_with_file[file_location_server]) == 0: # There is nothing we can do
                     print('Wow, File not found on any servers')
                     continue
-                server_connection = servers_with_file[file_location_server][0] #TODO take available server
+                flag = 0
+                server_connection = ''
+                while not flag:
+                    for scon in servers_with_file[file_location_server]:
+                        if scon in server_connections_online:
+                            server_connection = scon
+                            flag = 1
+                            break
+                    print('Waiting for any storage server with this file to turn on')
+                    time.sleep(5)
+
                 send_string_to_client('recieve file from:' + server_connection.address_for_client + str(port_p1))
                 server_connection.commands_to_send_p1.append(('send file:' + concat_path(root, file_location_server) + str(port_p1), 'sent'))
         else:
             lst = list(map(str, command.split()))
-            # command = add_root_and_wd_to_command(command)
             p = Popen([add_to_command(add_to_command(command, working_dir), root)], stdout=PIPE, stderr=PIPE, shell=True)
             output, error = p.communicate()
             nameserver_result = ''

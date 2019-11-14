@@ -113,10 +113,14 @@ while True:
 
     while True:
         command = recieve_string(con) # TODO handle syntax errors
-        print('recieved string:', command)
         if len(command) == 0:
             break
 
+        if command == 'ping':
+            send_string_to_s(con, 'ping')
+            continue
+
+        print('recieved string:', command)
         if command[:13] == 'recieve file:':
             file_location_server = command[13:-4]
             port = int(command[-4:])

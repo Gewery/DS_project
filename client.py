@@ -5,7 +5,7 @@ import sys
 
 
 def upload_file(sock, client_location):
-    f = open(client_location, 'rb') # TODO check if file exists
+    f = open(client_location, 'rb')  # TODO check if file exists
     to_send = []
     chunk = f.read(1024)
     while chunk:
@@ -25,7 +25,8 @@ def upload_file(sock, client_location):
 def download_file(sock, client_location):
     if os.path.exists(client_location):
         print('File already exists, saving it as: ', end='')
-        client_location, ext = client_location[:client_location.rfind('.')], client_location[client_location.rfind('.') + 1:]
+        client_location, ext = client_location[:client_location.rfind('.')], client_location[
+                                                                             client_location.rfind('.') + 1:]
 
         number = 1
         while os.path.exists(client_location + '_copy' + str(number) + '.' + ext):
@@ -62,14 +63,20 @@ def send_string_as_kb(st, s):
     kb += encoded_command
     s.send(kb)  # send command with 0-bytes in the beginning
 
+
 def connect_to(ss_addr, ss_port):
     sock = socket.socket()
     sock.connect((ss_addr, ss_port))
     return sock
 
+
 print(
     'commands:\nupload file: uf [location on localhost] [location on server (with name of file)]\n'
-    'download file: df [location of file on server] [location on localhost (with name of file)]\n')
+    'download file: df [location of file on server] [location on localhost (with name of file)]\n'
+    'initialization: init\n'
+    'file creation: touch [directory and name]\n'
+    'directory creation: mkdir [directory]\n'
+    'directory deletion: rmdir [directory]\n')
 
 nameserver_address, nameserver_port = "18.218.164.132", 8800
 s = socket.socket()
@@ -86,12 +93,12 @@ working_dir = recieve_string(s)
 while True:
     command = input('~' + working_dir + '> ')
 
-    send_string_as_kb(command, s)
-
-    if command == 'init':
-        working_dir = ''
-    elif command[:2] == 'uf': # TODO white list of commands?
-        command, client_location, server_location = map(str, command.split())
+    if command[:2] == 'uf':  # TODO white list of commands?
+        cmd, client_location, server_location = map(str, command.split())
+        if not os.path.exists(client_location):
+            print('File ' + client_location + ' does not exists')
+            continue
+        send_string_as_kb(command, s)
         recieve_st = recieve_string(s)
         if recieve_st[:13] != 'send file to:':
             print('Error occured. Recieved command from nameserver:', recieve_st)
@@ -100,7 +107,13 @@ while True:
             ss_port = int(recieve_st[-4:])
             sock = connect_to(ss_addr, ss_port)
             upload_file(sock, client_location)
+        continue
     elif command[:2] == 'df':
+        lst = list(map(str, command.split()))
+        if len(lst) != 3:
+            print('Wrong format of command ' + command)
+            continue
+        send_string_as_kb(command, s)
         command, server_location, client_location = map(str, command.split())
         recieve_st = recieve_string(s)
         if recieve_st[:18] != 'recieve file from:':
@@ -110,6 +123,11 @@ while True:
             ss_port = int(recieve_st[-4:])
             sock = connect_to(ss_addr, ss_port)
             download_file(sock, client_location)
+        continue
+
+    send_string_as_kb(command, s)
+    if command == 'init':
+        working_dir = ''
     else:
         recieve_st = recieve_string(s)
         if command == "ls":
@@ -121,4 +139,3 @@ while True:
             continue
         if len(recieve_st) != 0:
             print(recieve_st)
-
