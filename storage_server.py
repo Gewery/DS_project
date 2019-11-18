@@ -1,5 +1,6 @@
 import os
 import socket
+import shutil
 from subprocess import Popen, PIPE
 import multiprocessing
 
@@ -156,6 +157,9 @@ while True:
                 response = send_file(connection, file_location_server)
                 send_string_to_s(con, response)
                 connection.close()
+        elif command[:18] == 'get_available_size':
+            available_size = list(shutil.disk_usage("/"))[2]
+            send_string_to_s(con, str(int(available_size * 100 / 2**30) / 100) + ' GiB available')
         else:
             p = Popen([command], stdout = PIPE, stderr = PIPE, shell=True)
             output, error = p.communicate()

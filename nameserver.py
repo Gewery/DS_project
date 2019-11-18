@@ -18,6 +18,7 @@ class ServerConnection(Thread):
         self.commands_to_send_p1 = [] #[(command, correct_response), (), ..., ()]
         self.commands_to_send_p2 = []
         self.last_checked = time.time()
+        self.response = ''
 
     def reconnect(self):
         print('reconnecting to server' + self.address)
@@ -57,7 +58,9 @@ class ServerConnection(Thread):
                 self._send_string(add_to_command(command, root))
                 response = self._recieve_string()
                 print('got response >' + response + '<')
-                if response != correct_response:
+                if correct_response == '!ANY!':
+                    self.response = response
+                elif response != correct_response:
                     print('Command ' + add_to_command(command, root) + ' not executed on server ' + self.address + '. Trying again')
                     self.commands_to_send_p1.insert(0, (command, correct_response))
                 else:
@@ -69,9 +72,9 @@ class ServerConnection(Thread):
                                 servers_with_file[file].append(self)
                     elif command[:3] == 'cp ':
                         file = list(map(str, command.split()))[2]
-                        if file not in servers_with_file:
+                        if file not in servers_with_file: # imp
                             servers_with_file[file] = []
-                        if self not in servers_with_file[file]:
+                        if self not in servers_with_file[file]: # imp
                             servers_with_file[file].append(self)
                     elif command[:3] == 'rm ':
                         rf = 0
@@ -123,7 +126,7 @@ class ServerConnection(Thread):
 
         return st.decode('utf-8')
 
-ping_timeout = 5
+ping_timeout = 2
 
 def recieve_string_from_client():
     try:
@@ -151,7 +154,7 @@ def send_string_to_client(st):
 
 server_connections = []
 server_connections_online = []
-servers = [('3.15.137.86', '3.15.137.86'), ('52.15.138.129', '52.15.138.129'), ('3.134.114.103', '3.134.114.103')]
+servers = [('3.134.84.124', '3.134.84.124')]
 storage_port = 8801
 servers_with_file = {} # stores connections
 port_p2 = 8803
@@ -236,6 +239,11 @@ while True:
         if command == 'init':
             servers_with_file.clear()
             working_dir = ''
+
+            for scon in server_connections:
+                scon.commands_to_send_p1.clear()
+                scon.commands_to_send_p2.clear()
+
             p = Popen(['rm -rf mount'], stdout=PIPE, stderr=PIPE, shell=True)
             output, error = p.communicate()
             send_command_to_servers('rm -rf ', output.decode('utf-8'))
@@ -243,6 +251,25 @@ while True:
             p = Popen(['mkdir mount'], stdout=PIPE, stderr=PIPE, shell=True)
             output, error = p.communicate()
             send_command_to_servers('mkdir ', output.decode('utf-8'))
+
+            available_size = ''
+
+            for scon in server_connections_online:
+                scon.commands_to_send_p1.append(('get_available_size', '!ANY!'))
+                for i in range(2):
+                    if scon.response == '':
+                        time.sleep(0.2)
+                if scon.response == '':
+                    continue
+                available_size = scon.response
+                scon.response = ''
+                break
+
+            if available_size == '':
+                send_string_to_client('No servers online, try later')
+            else:
+                send_string_to_client(available_size)
+
         elif command[:2] == 'uf':
             lst = list(map(str, command.split()))
             if len(lst) > 3:
@@ -299,6 +326,24 @@ while True:
 
                 send_string_to_client('recieve file from:' + server_connection.address_for_client + str(port_p1))
                 server_connection.commands_to_send_p1.append(('send file:' + concat_path(root, file_location_server) + str(port_p1), 'sent'))
+        elif command[:5] == 'stat ':
+            lst = list(map(str, command.split()))
+            file_location_server = lst[1]
+            file_location_server = concat_path(working_dir, file_location_server)
+            for scon in servers_with_file[file_location_server]:
+                if scon in server_connections_online:
+                    scon.commands_to_send_p1.append((add_to_command(command, working_dir), '!ANY!'))
+                    for i in range(2):
+                        if scon.response == '':
+                            time.sleep(0.2)
+                    if scon.response == '':
+                        continue
+                    file_stat = scon.response
+                    scon.response = ''
+            if file_stat == '':
+                send_string_to_client('No servers online, try later')
+            else:
+                send_string_to_client(file_stat)
         else:
             lst = list(map(str, command.split()))
             p = Popen([add_to_command(add_to_command(command, working_dir), root)], stdout=PIPE, stderr=PIPE, shell=True)

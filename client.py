@@ -78,7 +78,7 @@ print(
     'directory creation: mkdir [directory]\n'
     'directory deletion: rmdir [directory]\n')
 
-nameserver_address, nameserver_port = "18.218.164.132", 8800
+nameserver_address, nameserver_port = "18.191.53.235", 8800
 s = socket.socket()
 s.connect((nameserver_address, nameserver_port))
 working_dir = recieve_string(s)
@@ -94,6 +94,11 @@ while True:
     command = input('~' + working_dir + '> ')
 
     if command[:2] == 'uf':  # TODO white list of commands?
+        lst = list(map(str, command.split()))
+        if len(lst) != 3:
+            print('Wrong format of command ' + command)
+            continue
+
         cmd, client_location, server_location = map(str, command.split())
         if not os.path.exists(client_location):
             print('File ' + client_location + ' does not exists')
@@ -128,6 +133,9 @@ while True:
     send_string_as_kb(command, s)
     if command == 'init':
         working_dir = ''
+        recieve_st = recieve_string(s)
+        if len(recieve_st) != 0:
+            print(recieve_st)
     else:
         recieve_st = recieve_string(s)
         if command == "ls":
